@@ -39,49 +39,40 @@ namespace CompanionOverhaul
                                           where o.IsFemale && o.Occupation.ToString() == "Wanderer"
                                           select o) ;
 
-            int count = 0;
+            int editedCount = 0;
 
             try
             {
                 foreach (CharacterObject o in companions)
                 {
                     ParseXML(filePath, o.Culture.GetCultureCode().ToString(), out string min, out string max);
-                    SetBodyProperties(o, GenerateStaticBodyProperties(min), GenerateStaticBodyProperties(max));
 
-                    count++;
+                    o.StaticBodyPropertiesMin = GenerateStaticBodyProperties(min);
+                    o.StaticBodyPropertiesMax = GenerateStaticBodyProperties(max);
+
+                    editedCount++;
                 }
+
+                if (editedCount == companions.Count)
+                    InformationManager.DisplayMessage(new InformationMessage($"All {editedCount} Companions Successfully Updated", Color.FromUint(4281584691)));
+
+                else if (editedCount < companions.Count)
+                    throw new Exception(companions.Count - editedCount + " Companions Failed to Update");
+
+                else
+                    throw new Exception("If you see this, you've just witness some black fucking magic cause I have no idea how this happened");
             }
 
             catch (Exception e)
             {
-                MessageBox.Show("Companion Overhaul | Error Updating Companions.\n\n" +
+                MessageBox.Show("Companion Overhaul - Error Updating Companions.\n\n" +
                     e.Message + "\n\n" + e.InnerException?.Message);
+
+                InformationManager.DisplayMessage(new InformationMessage("Error Updating Companions\n" +
+                    (companions.Count - editedCount) + " Companions Failed to Update", Color.FromUint(4294901760)));
             }
-
-            if (count == companions.Count)
-                InformationManager.DisplayMessage(new InformationMessage(count + " Companions Updated", Color.FromUint(4281584691)));
-
-            else if (count < companions.Count)
-                InformationManager.DisplayMessage(new InformationMessage("Error Updating Companions\n" + 
-                    count + " out of " + companions.Count + " Companions Updated", Color.FromUint(4294901760)));
-
-            else
-                InformationManager.DisplayMessage(new InformationMessage("If you see this, " +
-                    "you've just witnessed some black fucking magic cause I have no idea how this happened", 
-                    Color.FromUint(4294901760)));
         }
 
-        /// <summary>
-        /// Parses the provided XML file and return the appropriate <see cref="keyLength"/> chars long key
-        /// required by <see cref="GenerateStaticBodyProperties(string)"/> to generate a <see cref="StaticBodyProperties"/>.
-        /// </summary>
-        /// <param name="filePath">Relative <see cref="filePath"/> of the external XML.</param>
-        /// <param name="cultureCode">String required to compare against IDs parsed from the external XML.</param>
-        /// <param name="min">Out parameter required to store the <see cref="CharacterObject.StaticBodyPropertiesMin"/> required by
-        /// <see cref="SetBodyProperties(CharacterObject, StaticBodyProperties, StaticBodyProperties)"/>.</param>
-        /// <param name="max">Out parameter required to store the <see cref="CharacterObject.StaticBodyPropertiesMax"/> required by
-        /// <see cref="SetBodyProperties(CharacterObject, StaticBodyProperties, StaticBodyProperties)"/>.</param>
-        /// <returns>Returns true when successful.</returns>
         private bool ParseXML(string filePath, string cultureCode, out string min, out string max)
         {
             if (cultureCode == null)
@@ -103,30 +94,12 @@ namespace CompanionOverhaul
                 }
             }
 
+            if (min == null || max == null)
+                throw new ArgumentNullException("Min and/or Max keys are NULL");
+
             return true;
         }
 
-        /// <summary>
-        /// Updates the given <see cref="CharacterObject"/>'s 
-        /// <see cref="CharacterObject.StaticBodyPropertiesMin"/> and 
-        /// <see cref="CharacterObject.StaticBodyPropertiesMax"/>.
-        /// </summary>
-        /// <param name="characterObject">The <see cref="CharacterObject"/> to update.</param>
-        /// <param name="bodyPropertiesMin">The new <see cref="CharacterObject.StaticBodyPropertiesMin"/> to apply.</param>
-        /// <param name="bodyPropertiesMax">The new <see cref="CharacterObject.StaticBodyPropertiesMax"/> to apply.</param>
-        private void SetBodyProperties(CharacterObject characterObject, 
-            StaticBodyProperties bodyPropertiesMin, StaticBodyProperties bodyPropertiesMax)
-        {
-            characterObject.StaticBodyPropertiesMin = bodyPropertiesMin;
-            characterObject.StaticBodyPropertiesMax = bodyPropertiesMax;
-        }
-
-        /// <summary>
-        /// Generates a <see cref="StaticBodyProperties"/> from a <see cref="keyLength"/> chars long key 
-        /// by parsing and spliting it into <see cref="keyPartCount"/> constituant parts of length <see cref="keyPartLength"/>.
-        /// </summary>
-        /// <param name="key">Key required to generate the <see cref="StaticBodyProperties"/> object.</param>
-        /// <returns>Returns the generated <see cref="StaticBodyProperties"/> object.</returns>
         private StaticBodyProperties GenerateStaticBodyProperties(string key)
         {
             if (key.Length != keyLength)
