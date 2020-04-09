@@ -1,4 +1,4 @@
-# CompanionOverhaul
+# Companion Overhaul
  Mod for Mount & Blade II: Bannerlord
  
  Hosted on Nexus:
