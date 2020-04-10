@@ -7,6 +7,8 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.Library;
 using System.Windows.Forms;
 using System.Xml;
+using HarmonyLib;
+using System.Reflection;
 
 namespace CompanionOverhaul
 {
@@ -15,9 +17,22 @@ namespace CompanionOverhaul
         private static readonly int keyLength = 128;
         private static readonly int keyPartCount = 8;
         private static readonly int keyPartLength = keyLength / keyPartCount;
-        private static readonly string filePath = @"..\..\Modules\CompanionOverhaul\BodyProperties.xml";
+        private readonly string bodyPropertiesPath = @"..\..\Modules\CompanionOverhaul\BodyProperties.xml";
 
         private bool isLoaded = false;
+
+        private XmlDocument bodyPropertiesFile;
+
+        protected override void OnSubModuleLoad()
+        {
+            base.OnSubModuleLoad();
+
+            bodyPropertiesFile = new XmlDocument();
+            bodyPropertiesFile.Load(bodyPropertiesPath);
+
+            var harmony = new Harmony("companionoverhaul.characterobject.patch");
+            harmony.PatchAll();
+        }
 
         protected override void OnBeforeInitialModuleScreenSetAsRoot()
         {
@@ -30,69 +45,100 @@ namespace CompanionOverhaul
             }
         }
 
-        public override void OnNewGameCreated(Game game, object initializerObject)
+        public override bool DoLoading(Game game)
         {
-            base.OnNewGameCreated(game, initializerObject);
+            base.DoLoading(game);
 
-            List<CharacterObject> companions =
-                new List<CharacterObject>(from o in CharacterObject.Templates
-                                          where o.IsFemale && o.Occupation == Occupation.Wanderer
-                                          select o);
-
-            int editedCount = 0;
-
-            try
+            try 
             {
-                foreach (CharacterObject o in companions)
+                if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.NewCampaign)
                 {
-                    ParseXML(filePath, o.Culture.GetCultureCode().ToString(), out string min, out string max);
+                    List<CharacterObject> templates =
+                        new List<CharacterObject>(from o in CharacterObject.Templates
+                                                  where o.IsFemale && o.Occupation == Occupation.Wanderer
+                                                  select o);
 
-                    o.StaticBodyPropertiesMin = GenerateStaticBodyProperties(min);
-                    o.StaticBodyPropertiesMax = GenerateStaticBodyProperties(max);
+                    if (templates.Count == 0)
+                        throw new Exception("Template list is empty");
 
-                    editedCount++;
+                    int editedTemplateCount = 0;
+
+                    foreach (CharacterObject o in templates)
+                    {
+                        ParseXML(o.Culture.GetCultureCode().ToString(), out string min, out string max);
+
+                        o.StaticBodyPropertiesMin = GenerateStaticBodyProperties(min);
+                        o.StaticBodyPropertiesMax = GenerateStaticBodyProperties(max);
+
+                        editedTemplateCount++;
+                    }
+
+                    if (editedTemplateCount == templates.Count)
+                        InformationManager.DisplayMessage(new InformationMessage("All templates successfully updated", Color.FromUint(4281584691)));
+                    else if (editedTemplateCount < templates.Count && editedTemplateCount > 0)
+                        InformationManager.DisplayMessage(new InformationMessage(editedTemplateCount + " companions successfully updated", Color.FromUint(4281584691)));
                 }
 
-                if (editedCount == companions.Count)
-                    InformationManager.DisplayMessage(new InformationMessage("All companions successfully updated", Color.FromUint(4281584691)));
+                if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.SavedCampaign)
+                {
+                    List<Hero> companions =
+                          new List<Hero>(from o in Hero.All
+                                         where o.IsFemale && o.IsWanderer
+                                         select o);
 
-                else if (editedCount < companions.Count)
-                    throw new Exception(companions.Count - editedCount + " companions failed to update");
+                    if (companions.Count == 0)
+                        throw new Exception("Companion list is empty");
 
-                else
-                    throw new Exception("You've just witness some black fucking magic cause I have no idea how this happened");
+                    int editedCompanionCount = 0;
+                    Random rand = new Random();
+
+                    foreach (Hero h in companions)
+                    {
+                        ParseXML(h.Culture.GetCultureCode().ToString(), out string min, out string max);
+
+                        h.CharacterObject.UpdatePlayerCharacterBodyProperties(
+                                BodyProperties.GetRandomBodyProperties(h.IsFemale,
+                                    new BodyProperties(h.DynamicBodyProperties, GenerateStaticBodyProperties(min)),
+                                    new BodyProperties(h.DynamicBodyProperties, GenerateStaticBodyProperties(max)),
+                                    (int)h.CharacterObject.Equipment.HairCoverType, rand.Next(),
+                                    h.CharacterObject.HairTags,
+                                    h.CharacterObject.BeardTags,
+                                    h.CharacterObject.TattooTags),
+                                h.IsFemale);
+
+                        editedCompanionCount++;
+                    }
+
+                    if (editedCompanionCount == companions.Count && companions.Count != 0)
+                        InformationManager.DisplayMessage(new InformationMessage($"All {editedCompanionCount} companions successfully updated", Color.FromUint(4281584691)));
+                    else if (editedCompanionCount < companions.Count && editedCompanionCount > 0)
+                        InformationManager.DisplayMessage(new InformationMessage(editedCompanionCount + " companions successfully updated", Color.FromUint(4281584691)));
+                } 
             }
 
             catch (Exception e)
             {
-                MessageBox.Show("COMPANION OVERHAUL: ERROR DURING COMPANION UPDATE\n\n" +
-                    e.Message + "\n\n" + e.InnerException?.Message);
-
-                InformationManager.DisplayMessage(new InformationMessage("Error updating companions\n" +
-                    (companions.Count - editedCount) + " companions failed to update", Color.FromUint(4294901760)));
+                MessageBox.Show("Companion Overhaul: Error during companion update\n\n" + e.Message + "\n\n" + e.InnerException?.Message);
+                InformationManager.DisplayMessage(new InformationMessage("Error updating companions", Color.FromUint(4294901760)));
             }
+
+            return true;
         }
 
-        private bool ParseXML(string filePath, string cultureCode, out string min, out string max)
+        private bool ParseXML(string cultureCode, out string min, out string max)
         {
             if (cultureCode == null)
                 throw new ArgumentNullException("CultureCode is null");
 
-            XmlDocument xmlDocument = new XmlDocument();
-            xmlDocument.Load(filePath);
-
             min = max = "";
 
-            foreach (XmlNode node in xmlDocument.DocumentElement.ChildNodes)
-            {
+            foreach (XmlNode node in bodyPropertiesFile.DocumentElement.ChildNodes)
                 if (node.Attributes["id"]?.InnerText == cultureCode)
                 {
                     min = node.FirstChild.Attributes["value"]?.InnerText;
                     max = node.LastChild.Attributes["value"]?.InnerText;
-
                     break;
                 }
-            }
 
             if (min == null || max == null)
                 throw new ArgumentNullException("Returned key is null");
