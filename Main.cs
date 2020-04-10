@@ -10,7 +10,7 @@ using System.Xml;
 
 namespace CompanionOverhaul
 {
-    public class Main : MBSubModuleBase 
+    public class Main : MBSubModuleBase
     {
         private static readonly int keyLength = 128;
         private static readonly int keyPartCount = 8;
@@ -35,9 +35,9 @@ namespace CompanionOverhaul
             base.OnNewGameCreated(game, initializerObject);
 
             List<CharacterObject> companions =
-                new List<CharacterObject>(from o in CharacterObject.Templates 
-                                          where o.IsFemale && o.Occupation.ToString() == "Wanderer"
-                                          select o) ;
+                new List<CharacterObject>(from o in CharacterObject.Templates
+                                          where o.IsFemale && o.Occupation == Occupation.Wanderer
+                                          select o);
 
             int editedCount = 0;
 
@@ -54,29 +54,29 @@ namespace CompanionOverhaul
                 }
 
                 if (editedCount == companions.Count)
-                    InformationManager.DisplayMessage(new InformationMessage($"All {editedCount} Companions Successfully Updated", Color.FromUint(4281584691)));
+                    InformationManager.DisplayMessage(new InformationMessage("All companions successfully updated", Color.FromUint(4281584691)));
 
                 else if (editedCount < companions.Count)
-                    throw new Exception(companions.Count - editedCount + " Companions Failed to Update");
+                    throw new Exception(companions.Count - editedCount + " companions failed to update");
 
                 else
-                    throw new Exception("If you see this, you've just witness some black fucking magic cause I have no idea how this happened");
+                    throw new Exception("You've just witness some black fucking magic cause I have no idea how this happened");
             }
 
             catch (Exception e)
             {
-                MessageBox.Show("Companion Overhaul - Error Updating Companions.\n\n" +
+                MessageBox.Show("COMPANION OVERHAUL: ERROR DURING COMPANION UPDATE\n\n" +
                     e.Message + "\n\n" + e.InnerException?.Message);
 
-                InformationManager.DisplayMessage(new InformationMessage("Error Updating Companions\n" +
-                    (companions.Count - editedCount) + " Companions Failed to Update", Color.FromUint(4294901760)));
+                InformationManager.DisplayMessage(new InformationMessage("Error updating companions\n" +
+                    (companions.Count - editedCount) + " companions failed to update", Color.FromUint(4294901760)));
             }
         }
 
         private bool ParseXML(string filePath, string cultureCode, out string min, out string max)
         {
             if (cultureCode == null)
-                throw new ArgumentNullException("CharacterObject has no CultureCode");
+                throw new ArgumentNullException("CultureCode is null");
 
             XmlDocument xmlDocument = new XmlDocument();
             xmlDocument.Load(filePath);
@@ -95,7 +95,7 @@ namespace CompanionOverhaul
             }
 
             if (min == null || max == null)
-                throw new ArgumentNullException("Min and/or Max keys are NULL");
+                throw new ArgumentNullException("Returned key is null");
 
             return true;
         }
@@ -103,7 +103,7 @@ namespace CompanionOverhaul
         private StaticBodyProperties GenerateStaticBodyProperties(string key)
         {
             if (key.Length != keyLength)
-                throw new FormatException("StaticBodyProperty key isn't of length " + keyLength);
+                throw new FormatException("Key must be of length " + keyLength);
 
             List<ulong> keyParts = new List<ulong>(keyPartCount);
 
