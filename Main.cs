@@ -1,20 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using TaleWorlds.Core;
+﻿using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Library;
-using System.Windows.Forms;
 using System.Xml;
 using HarmonyLib;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace CompanionOverhaul
 {
     public class Main : MBSubModuleBase
     {
         private bool isLoaded;
-        private static XmlDocument bodyPropertiesFile;
+        private UpdateBehaviour updateStatus;
+        public static XmlDocument bodyPropertiesFile;
 
         protected override void OnSubModuleLoad()
         {
@@ -23,7 +23,7 @@ namespace CompanionOverhaul
             bodyPropertiesFile = new XmlDocument();
             bodyPropertiesFile.Load(bodyPropertiesPath);
 
-            var harmony = new Harmony("mehdi.companionoverhaul.patch");
+            var harmony = new Harmony("accrcd.companionoverhaul.patch");
             harmony.PatchAll();
         }
 
@@ -38,92 +38,14 @@ namespace CompanionOverhaul
             }
         }
 
-        public override void OnGameInitializationFinished(Game game)
+        protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
-            base.OnGameInitializationFinished(game);
-
-            try 
-            {
-                List<CharacterObject> templates = new List<CharacterObject>(from o in CharacterObject.Templates
-                                                                            where o.IsFemale && o.Occupation == Occupation.Wanderer
-                                                                            select o);
-                if (Campaign.Current != null)
-                {
-                    if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.NewCampaign)
-                    {
-                        UpdateTemplates(templates);
-                        UpdateStatus.StatusData.hasUpdated = true;
-                    }
-                        
-                    else if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.SavedCampaign)
-                    {
-                        List<Hero> companions = new List<Hero>(from o in Hero.All
-                                                               where o.IsFemale && o.IsWanderer
-                                                               select o);
-
-                        if (!UpdateStatus.StatusData.hasUpdated)
-                        {
-                            UpdateCompanions(companions);
-                            UpdateStatus.StatusData.hasUpdated = true;
-                        }
-                        
-                        /*
-                        InformationManager.ShowInquiry(new InquiryData("Companion Overhaul", "Regenerate companions?", true, true, "Yes", "No",
-                        delegate(){ UpdateCompanions(companions); InformationManager.DisplayMessage(new InformationMessage("Companions faces updated", GREEN)); },
-                        delegate(){ InformationManager.DisplayMessage(new InformationMessage("Companions faces unchanged", RED)); }), false);
-                        */
-                    }
-                }
-            }
-
-            catch (Exception e)
-            {
-                MessageBox.Show("Companion Overhaul: Error during companion update\n\n" + e.Message + "\n\n" + e.InnerException?.Message);
-                InformationManager.DisplayMessage(new InformationMessage("Error updating companions", RED));
-            }
+            CampaignGameStarter gameInitializer = (CampaignGameStarter)gameStarterObject;
+            updateStatus = new UpdateBehaviour();
+            gameInitializer.AddBehavior(updateStatus);
         }
 
-        private void UpdateTemplates(List<CharacterObject> templates)
-        {
-            if (templates.Count == 0)
-                throw new Exception("Template list is empty");
-
-            foreach (CharacterObject o in templates)
-            {
-                GenerateStaticBodyProperties(o.Culture.GetCultureCode().ToString(), out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax);
-
-                o.StaticBodyPropertiesMin = sbpMin;
-                o.StaticBodyPropertiesMax = sbpMax;
-            }
-
-            InformationManager.DisplayMessage(new InformationMessage("Templates successfully updated", GREEN));
-        }
-
-        private void UpdateCompanions(List<Hero> companions)
-        {
-            if (companions.Count == 0)
-                throw new Exception("Companion list is empty");
-
-            Random rand = new Random();
-            foreach (Hero h in companions)
-            {   
-                GenerateStaticBodyProperties(h.Culture.GetCultureCode().ToString(), out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax);
-
-                h.CharacterObject.UpdatePlayerCharacterBodyProperties(
-                        BodyProperties.GetRandomBodyProperties(h.IsFemale,
-                            new BodyProperties(h.DynamicBodyProperties, sbpMin),
-                            new BodyProperties(h.DynamicBodyProperties, sbpMax),
-                            (int)h.CharacterObject.Equipment.HairCoverType, rand.Next(),
-                            h.CharacterObject.HairTags,
-                            h.CharacterObject.BeardTags,
-                            h.CharacterObject.TattooTags),
-                        h.IsFemale);
-            }
-
-            InformationManager.DisplayMessage(new InformationMessage("Companions successfully updated", GREEN));
-        }
-
-        private void GenerateStaticBodyProperties(string cultureCode, out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax)
+        public static void GenerateStaticBodyProperties(string cultureCode, out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax)
         {
             ParseKeys(cultureCode, out string min, out string max);
 
@@ -145,14 +67,14 @@ namespace CompanionOverhaul
                                               maxKeyParts[4], maxKeyParts[5], maxKeyParts[6], maxKeyParts[7]);
         }
 
-        private void ParseKeys(string cultureCode, out string min, out string max)
+        private static void ParseKeys(string cultureCode, out string min, out string max)
         {
             if (cultureCode == null)
                 throw new ArgumentNullException("CultureCode is null");
 
             min = max = "";
 
-            foreach (XmlNode node in bodyPropertiesFile.DocumentElement.ChildNodes)
+            foreach (XmlNode node in Main.bodyPropertiesFile.DocumentElement.ChildNodes)
                 if (node.Attributes["id"]?.InnerText == cultureCode)
                 {
                     min = node.FirstChild.Attributes["value"]?.InnerText;
@@ -164,12 +86,13 @@ namespace CompanionOverhaul
                 throw new ArgumentNullException("Returned key is null");
         }
 
-        private static readonly int keyLength = 128;
-        private static readonly int keyPartCount = 8;
-        private readonly int keyPartLength = keyLength / keyPartCount;
-        private readonly string bodyPropertiesPath = @"..\..\Modules\CompanionOverhaul\ModuleData\BodyProperties.xml";
+        private const int keyLength = 128;
+        private const int keyPartCount = 8;
+        private const int keyPartLength = keyLength / keyPartCount;
 
-        private static readonly Color GREEN = Color.FromUint(4281584691);
-        private static readonly Color RED = Color.FromUint(4294901760);
+        private static readonly string bodyPropertiesPath = @"..\..\Modules\CompanionOverhaul\ModuleData\BodyProperties.xml";
+
+        public static readonly Color GREEN = Color.FromUint(4281584691);
+        public static readonly Color RED = Color.FromUint(4294901760);
     }
 }

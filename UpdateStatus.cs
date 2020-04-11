@@ -3,19 +3,23 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using TaleWorlds.CampaignSystem;
+using TaleWorlds.SaveSystem;
 
 namespace CompanionOverhaul
 {
-    public class UpdateStatus : CampaignBehaviorBase
+    public class UpdateStatus
     {
-        public static UpdateStatusData StatusData = new UpdateStatusData();
+        [SaveableField(0)] 
+        public bool hasUpdated;
+    }
 
-        public override void RegisterEvents() { }
+    public class UpdateStatusDefiner : SaveableTypeDefiner
+    {
+        public UpdateStatusDefiner() : base(450100) { }
 
-        public override void SyncData(IDataStore dataStore)
+        protected override void DefineClassTypes()
         {
-            dataStore.SyncData("_CompanionOverhaulUpdateStatusData", ref StatusData);
+            AddClassDefinition(typeof(UpdateStatus), 450101);
         }
     }
 }
