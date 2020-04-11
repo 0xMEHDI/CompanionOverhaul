@@ -8,13 +8,12 @@ using TaleWorlds.Library;
 using System.Windows.Forms;
 using System.Xml;
 using HarmonyLib;
-using System.IO;
 
 namespace CompanionOverhaul
 {
     public class Main : MBSubModuleBase
     {
-        private bool isLoaded = false;
+        private bool isLoaded;
         private static XmlDocument bodyPropertiesFile;
 
         protected override void OnSubModuleLoad()
@@ -24,7 +23,7 @@ namespace CompanionOverhaul
             bodyPropertiesFile = new XmlDocument();
             bodyPropertiesFile.Load(bodyPropertiesPath);
 
-            var harmony = new Harmony("companionoverhaul.characterobject.patch");
+            var harmony = new Harmony("mehdi.companionoverhaul.patch");
             harmony.PatchAll();
         }
 
@@ -39,17 +38,31 @@ namespace CompanionOverhaul
             }
         }
 
-        public override bool DoLoading(Game game)
+        public override void OnGameInitializationFinished(Game game)
         {
-            base.DoLoading(game);
+            base.OnGameInitializationFinished(game);
 
             try 
             {
-                if(Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.NewCampaign)
-                    UpdateTemplates();
+                List<CharacterObject> templates = new List<CharacterObject>(from o in CharacterObject.Templates
+                                                                            where o.IsFemale && o.Occupation == Occupation.Wanderer
+                                                                            select o);
+                if (Campaign.Current != null)
+                {
+                    if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.NewCampaign)
+                        UpdateTemplates(templates);
 
-                else if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.SavedCampaign)
-                    UpdateCompanions();
+                    else if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.SavedCampaign)
+                    {
+                        List<Hero> companions = new List<Hero>(from o in Hero.All
+                                                               where o.IsFemale && o.IsWanderer
+                                                               select o);
+
+                        InformationManager.ShowInquiry(new InquiryData("Companion Overhaul", "Regenerate companions?", true, true, "Yes", "No",
+                        delegate(){ UpdateCompanions(companions); InformationManager.DisplayMessage(new InformationMessage("Companions faces updated", GREEN)); },
+                        delegate(){ InformationManager.DisplayMessage(new InformationMessage("Companions faces unchanged", RED)); }), false);
+                    }
+                }
             }
 
             catch (Exception e)
@@ -57,15 +70,10 @@ namespace CompanionOverhaul
                 MessageBox.Show("Companion Overhaul: Error during companion update\n\n" + e.Message + "\n\n" + e.InnerException?.Message);
                 InformationManager.DisplayMessage(new InformationMessage("Error updating companions", RED));
             }
-
-            return true;
         }
 
-        private void UpdateTemplates()
+        private void UpdateTemplates(List<CharacterObject> templates)
         {
-            List<CharacterObject> templates = new List<CharacterObject>(from o in CharacterObject.Templates
-                                                                        where o.IsFemale && o.Occupation == Occupation.Wanderer
-                                                                        select o);
             if (templates.Count == 0)
                 throw new Exception("Template list is empty");
 
@@ -77,14 +85,11 @@ namespace CompanionOverhaul
                 o.StaticBodyPropertiesMax = sbpMax;
             }
 
-            InformationManager.DisplayMessage(new InformationMessage($"Templates successfully updated", GREEN));
+            InformationManager.DisplayMessage(new InformationMessage("Templates successfully updated", GREEN));
         }
 
-        private void UpdateCompanions()
+        private void UpdateCompanions(List<Hero> companions)
         {
-            List<Hero> companions = new List<Hero>(from o in Hero.All
-                                                   where o.IsFemale && o.IsWanderer
-                                                   select o);
             if (companions.Count == 0)
                 throw new Exception("Companion list is empty");
 
@@ -103,8 +108,6 @@ namespace CompanionOverhaul
                             h.CharacterObject.TattooTags),
                         h.IsFemale);
             }
-
-            InformationManager.DisplayMessage(new InformationMessage("Companions successfully updated", GREEN));
         }
 
         private void GenerateStaticBodyProperties(string cultureCode, out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax)

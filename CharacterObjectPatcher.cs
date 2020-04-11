@@ -1,12 +1,5 @@
 ﻿using HarmonyLib;
-using Helpers;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 
@@ -25,8 +18,6 @@ namespace CompanionOverhaul
                 staticBodyProperties.SetValue(__instance.HeroObject, properties.StaticProperties);
                 __instance.HeroObject.DynamicBodyProperties = properties.DynamicProperties;
                 __instance.HeroObject.UpdatePlayerGender(isFemale);
-
-                //InformationManager.DisplayMessage(new InformationMessage("Updated " + __instance.Name));
             }
 
             return true;
