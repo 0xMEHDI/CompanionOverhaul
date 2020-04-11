@@ -1,23 +1,31 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using TaleWorlds.Core;
+﻿using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Library;
-using System.Windows.Forms;
 using System.Xml;
+using HarmonyLib;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace CompanionOverhaul
 {
     public class Main : MBSubModuleBase
     {
-        private static readonly int keyLength = 128;
-        private static readonly int keyPartCount = 8;
-        private static readonly int keyPartLength = keyLength / keyPartCount;
-        private static readonly string filePath = @"..\..\Modules\CompanionOverhaul\BodyProperties.xml";
+        private bool isLoaded;
+        private UpdateBehaviour updateStatus;
+        public static XmlDocument bodyPropertiesFile;
 
-        private bool isLoaded = false;
+        protected override void OnSubModuleLoad()
+        {
+            base.OnSubModuleLoad();
+
+            bodyPropertiesFile = new XmlDocument();
+            bodyPropertiesFile.Load(bodyPropertiesPath);
+
+            var harmony = new Harmony("accrcd.companionoverhaul.patch");
+            harmony.PatchAll();
+        }
 
         protected override void OnBeforeInitialModuleScreenSetAsRoot()
         {
@@ -30,95 +38,61 @@ namespace CompanionOverhaul
             }
         }
 
-        public override void OnNewGameCreated(Game game, object initializerObject)
+        protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
-            base.OnNewGameCreated(game, initializerObject);
-
-            List<CharacterObject> companions =
-                new List<CharacterObject>(from o in CharacterObject.Templates
-                                          where o.IsFemale && o.Occupation == Occupation.Wanderer
-                                          select o);
-
-            int editedCount = 0;
-
-            try
-            {
-                foreach (CharacterObject o in companions)
-                {
-                    ParseXML(filePath, o.Culture.GetCultureCode().ToString(), out string min, out string max);
-
-                    o.StaticBodyPropertiesMin = GenerateStaticBodyProperties(min);
-                    o.StaticBodyPropertiesMax = GenerateStaticBodyProperties(max);
-
-                    editedCount++;
-                }
-
-                if (editedCount == companions.Count)
-                    InformationManager.DisplayMessage(new InformationMessage("All companions successfully updated", Color.FromUint(4281584691)));
-
-                else if (editedCount < companions.Count)
-                    throw new Exception(companions.Count - editedCount + " companions failed to update");
-
-                else
-                    throw new Exception("You've just witness some black fucking magic cause I have no idea how this happened");
-            }
-
-            catch (Exception e)
-            {
-                MessageBox.Show("COMPANION OVERHAUL: ERROR DURING COMPANION UPDATE\n\n" +
-                    e.Message + "\n\n" + e.InnerException?.Message);
-
-                InformationManager.DisplayMessage(new InformationMessage("Error updating companions\n" +
-                    (companions.Count - editedCount) + " companions failed to update", Color.FromUint(4294901760)));
-            }
+            CampaignGameStarter gameInitializer = (CampaignGameStarter)gameStarterObject;
+            updateStatus = new UpdateBehaviour();
+            gameInitializer.AddBehavior(updateStatus);
         }
 
-        private bool ParseXML(string filePath, string cultureCode, out string min, out string max)
+        public static void GenerateStaticBodyProperties(string cultureCode, out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax)
+        {
+            ParseKeys(cultureCode, out string min, out string max);
+
+            if (min.Length != keyLength || max.Length != keyLength)
+                throw new FormatException("Keys must be of length " + keyLength);
+
+            List<ulong> minKeyParts = new List<ulong>(keyPartCount);
+            List<ulong> maxKeyParts = new List<ulong>(keyPartCount);
+
+            for (int i = 0; i < keyLength; i += keyPartLength)
+            {
+                minKeyParts.Add(Convert.ToUInt64(min.Substring(i, keyPartLength), keyPartLength));
+                maxKeyParts.Add(Convert.ToUInt64(max.Substring(i, keyPartLength), keyPartLength));
+            }
+
+            sbpMin = new StaticBodyProperties(minKeyParts[0], minKeyParts[1], minKeyParts[2], minKeyParts[3],
+                                              minKeyParts[4], minKeyParts[5], minKeyParts[6], minKeyParts[7]);
+            sbpMax = new StaticBodyProperties(maxKeyParts[0], maxKeyParts[1], maxKeyParts[2], maxKeyParts[3],
+                                              maxKeyParts[4], maxKeyParts[5], maxKeyParts[6], maxKeyParts[7]);
+        }
+
+        private static void ParseKeys(string cultureCode, out string min, out string max)
         {
             if (cultureCode == null)
                 throw new ArgumentNullException("CultureCode is null");
 
-            XmlDocument xmlDocument = new XmlDocument();
-            xmlDocument.Load(filePath);
-
             min = max = "";
 
-            foreach (XmlNode node in xmlDocument.DocumentElement.ChildNodes)
-            {
+            foreach (XmlNode node in Main.bodyPropertiesFile.DocumentElement.ChildNodes)
                 if (node.Attributes["id"]?.InnerText == cultureCode)
                 {
                     min = node.FirstChild.Attributes["value"]?.InnerText;
                     max = node.LastChild.Attributes["value"]?.InnerText;
-
                     break;
                 }
-            }
 
             if (min == null || max == null)
                 throw new ArgumentNullException("Returned key is null");
-
-            return true;
         }
 
-        private StaticBodyProperties GenerateStaticBodyProperties(string key)
-        {
-            if (key.Length != keyLength)
-                throw new FormatException("Key must be of length " + keyLength);
+        private const int keyLength = 128;
+        private const int keyPartCount = 8;
+        private const int keyPartLength = keyLength / keyPartCount;
 
-            List<ulong> keyParts = new List<ulong>(keyPartCount);
+        private static readonly string bodyPropertiesPath = @"..\..\Modules\CompanionOverhaul\ModuleData\BodyProperties.xml";
 
-            for (int i = 0; i < keyLength; i += keyPartLength)
-                keyParts.Add(Convert.ToUInt64(key.Substring(i, keyPartLength), keyPartLength));
-
-            return new StaticBodyProperties(
-                keyParts[0],
-                keyParts[1],
-                keyParts[2],
-                keyParts[3],
-                keyParts[4],
-                keyParts[5],
-                keyParts[6],
-                keyParts[7]);
-        }
+        public static readonly Color GREEN = Color.FromUint(4281584691);
+        public static readonly Color RED = Color.FromUint(4294901760);
     }
 }
