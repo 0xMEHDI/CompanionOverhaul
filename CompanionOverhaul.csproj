@@ -214,6 +214,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CharacterObjectPatcher.cs" />
+    <Compile Include="UpdateStatus.cs" />
+    <Compile Include="UpdateStatusData.cs" />
+    <Compile Include="UpdateStatusDefiner.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

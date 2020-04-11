@@ -50,17 +50,28 @@ namespace CompanionOverhaul
                 if (Campaign.Current != null)
                 {
                     if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.NewCampaign)
+                    {
                         UpdateTemplates(templates);
-
+                        UpdateStatus.StatusData.hasUpdated = true;
+                    }
+                        
                     else if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.SavedCampaign)
                     {
                         List<Hero> companions = new List<Hero>(from o in Hero.All
                                                                where o.IsFemale && o.IsWanderer
                                                                select o);
 
+                        if (!UpdateStatus.StatusData.hasUpdated)
+                        {
+                            UpdateCompanions(companions);
+                            UpdateStatus.StatusData.hasUpdated = true;
+                        }
+                        
+                        /*
                         InformationManager.ShowInquiry(new InquiryData("Companion Overhaul", "Regenerate companions?", true, true, "Yes", "No",
                         delegate(){ UpdateCompanions(companions); InformationManager.DisplayMessage(new InformationMessage("Companions faces updated", GREEN)); },
                         delegate(){ InformationManager.DisplayMessage(new InformationMessage("Companions faces unchanged", RED)); }), false);
+                        */
                     }
                 }
             }
@@ -108,6 +119,8 @@ namespace CompanionOverhaul
                             h.CharacterObject.TattooTags),
                         h.IsFemale);
             }
+
+            InformationManager.DisplayMessage(new InformationMessage("Companions successfully updated", GREEN));
         }
 
         private void GenerateStaticBodyProperties(string cultureCode, out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax)
