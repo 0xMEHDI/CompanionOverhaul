@@ -8,20 +8,14 @@ using TaleWorlds.Library;
 using System.Windows.Forms;
 using System.Xml;
 using HarmonyLib;
-using System.Reflection;
+using System.IO;
 
 namespace CompanionOverhaul
 {
     public class Main : MBSubModuleBase
     {
-        private static readonly int keyLength = 128;
-        private static readonly int keyPartCount = 8;
-        private static readonly int keyPartLength = keyLength / keyPartCount;
-        private readonly string bodyPropertiesPath = @"..\..\Modules\CompanionOverhaul\BodyProperties.xml";
-
         private bool isLoaded = false;
-
-        private XmlDocument bodyPropertiesFile;
+        private static XmlDocument bodyPropertiesFile;
 
         protected override void OnSubModuleLoad()
         {
@@ -51,81 +45,91 @@ namespace CompanionOverhaul
 
             try 
             {
-                if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.NewCampaign)
-                {
-                    List<CharacterObject> templates =
-                        new List<CharacterObject>(from o in CharacterObject.Templates
-                                                  where o.IsFemale && o.Occupation == Occupation.Wanderer
-                                                  select o);
+                if(Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.NewCampaign)
+                    UpdateTemplates();
 
-                    if (templates.Count == 0)
-                        throw new Exception("Template list is empty");
-
-                    int editedTemplateCount = 0;
-
-                    foreach (CharacterObject o in templates)
-                    {
-                        ParseXML(o.Culture.GetCultureCode().ToString(), out string min, out string max);
-
-                        o.StaticBodyPropertiesMin = GenerateStaticBodyProperties(min);
-                        o.StaticBodyPropertiesMax = GenerateStaticBodyProperties(max);
-
-                        editedTemplateCount++;
-                    }
-
-                    if (editedTemplateCount == templates.Count)
-                        InformationManager.DisplayMessage(new InformationMessage("All templates successfully updated", Color.FromUint(4281584691)));
-                    else if (editedTemplateCount < templates.Count && editedTemplateCount > 0)
-                        InformationManager.DisplayMessage(new InformationMessage(editedTemplateCount + " companions successfully updated", Color.FromUint(4281584691)));
-                }
-
-                if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.SavedCampaign)
-                {
-                    List<Hero> companions =
-                          new List<Hero>(from o in Hero.All
-                                         where o.IsFemale && o.IsWanderer
-                                         select o);
-
-                    if (companions.Count == 0)
-                        throw new Exception("Companion list is empty");
-
-                    int editedCompanionCount = 0;
-                    Random rand = new Random();
-
-                    foreach (Hero h in companions)
-                    {
-                        ParseXML(h.Culture.GetCultureCode().ToString(), out string min, out string max);
-
-                        h.CharacterObject.UpdatePlayerCharacterBodyProperties(
-                                BodyProperties.GetRandomBodyProperties(h.IsFemale,
-                                    new BodyProperties(h.DynamicBodyProperties, GenerateStaticBodyProperties(min)),
-                                    new BodyProperties(h.DynamicBodyProperties, GenerateStaticBodyProperties(max)),
-                                    (int)h.CharacterObject.Equipment.HairCoverType, rand.Next(),
-                                    h.CharacterObject.HairTags,
-                                    h.CharacterObject.BeardTags,
-                                    h.CharacterObject.TattooTags),
-                                h.IsFemale);
-
-                        editedCompanionCount++;
-                    }
-
-                    if (editedCompanionCount == companions.Count && companions.Count != 0)
-                        InformationManager.DisplayMessage(new InformationMessage($"All {editedCompanionCount} companions successfully updated", Color.FromUint(4281584691)));
-                    else if (editedCompanionCount < companions.Count && editedCompanionCount > 0)
-                        InformationManager.DisplayMessage(new InformationMessage(editedCompanionCount + " companions successfully updated", Color.FromUint(4281584691)));
-                } 
+                else if (Campaign.Current.CampaignGameLoadingType == Campaign.GameLoadingType.SavedCampaign)
+                    UpdateCompanions();
             }
 
             catch (Exception e)
             {
                 MessageBox.Show("Companion Overhaul: Error during companion update\n\n" + e.Message + "\n\n" + e.InnerException?.Message);
-                InformationManager.DisplayMessage(new InformationMessage("Error updating companions", Color.FromUint(4294901760)));
+                InformationManager.DisplayMessage(new InformationMessage("Error updating companions", RED));
             }
 
             return true;
         }
 
-        private bool ParseXML(string cultureCode, out string min, out string max)
+        private void UpdateTemplates()
+        {
+            List<CharacterObject> templates = new List<CharacterObject>(from o in CharacterObject.Templates
+                                                                        where o.IsFemale && o.Occupation == Occupation.Wanderer
+                                                                        select o);
+            if (templates.Count == 0)
+                throw new Exception("Template list is empty");
+
+            foreach (CharacterObject o in templates)
+            {
+                GenerateStaticBodyProperties(o.Culture.GetCultureCode().ToString(), out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax);
+
+                o.StaticBodyPropertiesMin = sbpMin;
+                o.StaticBodyPropertiesMax = sbpMax;
+            }
+
+            InformationManager.DisplayMessage(new InformationMessage($"Templates successfully updated", GREEN));
+        }
+
+        private void UpdateCompanions()
+        {
+            List<Hero> companions = new List<Hero>(from o in Hero.All
+                                                   where o.IsFemale && o.IsWanderer
+                                                   select o);
+            if (companions.Count == 0)
+                throw new Exception("Companion list is empty");
+
+            Random rand = new Random();
+            foreach (Hero h in companions)
+            {   
+                GenerateStaticBodyProperties(h.Culture.GetCultureCode().ToString(), out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax);
+
+                h.CharacterObject.UpdatePlayerCharacterBodyProperties(
+                        BodyProperties.GetRandomBodyProperties(h.IsFemale,
+                            new BodyProperties(h.DynamicBodyProperties, sbpMin),
+                            new BodyProperties(h.DynamicBodyProperties, sbpMax),
+                            (int)h.CharacterObject.Equipment.HairCoverType, rand.Next(),
+                            h.CharacterObject.HairTags,
+                            h.CharacterObject.BeardTags,
+                            h.CharacterObject.TattooTags),
+                        h.IsFemale);
+            }
+
+            InformationManager.DisplayMessage(new InformationMessage("Companions successfully updated", GREEN));
+        }
+
+        private void GenerateStaticBodyProperties(string cultureCode, out StaticBodyProperties sbpMin, out StaticBodyProperties sbpMax)
+        {
+            ParseKeys(cultureCode, out string min, out string max);
+
+            if (min.Length != keyLength || max.Length != keyLength)
+                throw new FormatException("Keys must be of length " + keyLength);
+
+            List<ulong> minKeyParts = new List<ulong>(keyPartCount);
+            List<ulong> maxKeyParts = new List<ulong>(keyPartCount);
+
+            for (int i = 0; i < keyLength; i += keyPartLength)
+            {
+                minKeyParts.Add(Convert.ToUInt64(min.Substring(i, keyPartLength), keyPartLength));
+                maxKeyParts.Add(Convert.ToUInt64(max.Substring(i, keyPartLength), keyPartLength));
+            }
+
+            sbpMin = new StaticBodyProperties(minKeyParts[0], minKeyParts[1], minKeyParts[2], minKeyParts[3],
+                                              minKeyParts[4], minKeyParts[5], minKeyParts[6], minKeyParts[7]);
+            sbpMax = new StaticBodyProperties(maxKeyParts[0], maxKeyParts[1], maxKeyParts[2], maxKeyParts[3],
+                                              maxKeyParts[4], maxKeyParts[5], maxKeyParts[6], maxKeyParts[7]);
+        }
+
+        private void ParseKeys(string cultureCode, out string min, out string max)
         {
             if (cultureCode == null)
                 throw new ArgumentNullException("CultureCode is null");
@@ -142,29 +146,14 @@ namespace CompanionOverhaul
 
             if (min == null || max == null)
                 throw new ArgumentNullException("Returned key is null");
-
-            return true;
         }
 
-        private StaticBodyProperties GenerateStaticBodyProperties(string key)
-        {
-            if (key.Length != keyLength)
-                throw new FormatException("Key must be of length " + keyLength);
+        private static readonly int keyLength = 128;
+        private static readonly int keyPartCount = 8;
+        private readonly int keyPartLength = keyLength / keyPartCount;
+        private readonly string bodyPropertiesPath = @"..\..\Modules\CompanionOverhaul\ModuleData\BodyProperties.xml";
 
-            List<ulong> keyParts = new List<ulong>(keyPartCount);
-
-            for (int i = 0; i < keyLength; i += keyPartLength)
-                keyParts.Add(Convert.ToUInt64(key.Substring(i, keyPartLength), keyPartLength));
-
-            return new StaticBodyProperties(
-                keyParts[0],
-                keyParts[1],
-                keyParts[2],
-                keyParts[3],
-                keyParts[4],
-                keyParts[5],
-                keyParts[6],
-                keyParts[7]);
-        }
+        private static readonly Color GREEN = Color.FromUint(4281584691);
+        private static readonly Color RED = Color.FromUint(4294901760);
     }
 }

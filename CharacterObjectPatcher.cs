@@ -26,7 +26,7 @@ namespace CompanionOverhaul
                 __instance.HeroObject.DynamicBodyProperties = properties.DynamicProperties;
                 __instance.HeroObject.UpdatePlayerGender(isFemale);
 
-                InformationManager.DisplayMessage(new InformationMessage("Updated " + __instance.Name));
+                //InformationManager.DisplayMessage(new InformationMessage("Updated " + __instance.Name));
             }
 
             return true;
