@@ -40,6 +40,11 @@ namespace CompanionOverhaul
 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
+            base.OnGameStart(game, gameStarterObject);
+
+            if (Campaign.Current == null)
+                return;
+
             CampaignGameStarter gameInitializer = (CampaignGameStarter)gameStarterObject;
             updateStatus = new UpdateBehaviour();
             gameInitializer.AddBehavior(updateStatus);
